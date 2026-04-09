@@ -163,6 +163,66 @@ def fixed_tilt_system(*args, **kwargs):
     return _build_fixed_tilt_system(**kwargs)
 
 
+def single_axis_tracking_monofacial_system(weather_df, num_array, axis_tilt, axis_azimuth,
+                                           max_angle, module_parameters_list, inverter_parameters,
+                                           backtrack=True, gcr=0.4, albedo=0.2,
+                                           temperature_model='sapm',
+                                           array_type='open_rack_glass_glass',
+                                           module_type='glass_glass',
+                                           modules_per_string=1,
+                                           strings_per_inverter=1, name=None):
+    """
+    Create a monofacial single-axis tracking PV system without bifacial irradiance modeling.
+
+    This helper is intended for lightweight application workflows where the
+    tracking kinematics matter, but the pvfactors-based bifacial stack is not
+    required.
+    """
+
+    if isinstance(weather_df, pd.DataFrame):
+        times = weather_df.index
+        dt = times.freq.delta.total_seconds()
+        num_int = int(3600 / dt)
+    else:
+        raise TypeError('weather must be a pandas Series or DataFrame.')
+
+    temperature_model_parameters = (
+        TEMPERATURE_MODEL_PARAMETERS[temperature_model][array_type])
+
+    sat_mount = SingleAxisTrackerMount(axis_tilt=axis_tilt,
+                                       axis_azimuth=axis_azimuth,
+                                       max_angle=max_angle,
+                                       backtrack=backtrack,
+                                       gcr=gcr)
+
+    array_list = list()
+    for i in range(num_array):
+        array = Array(mount=sat_mount,
+                      albedo=albedo,
+                      module_parameters=module_parameters_list[i],
+                      temperature_model_parameters=temperature_model_parameters,
+                      module_type=module_type,
+                      modules_per_string=modules_per_string,
+                      name=f'Array {i+1}')
+        array_list.append(array)
+
+    if axis_azimuth == 180 or axis_azimuth == 0:
+        system = AVSystemEWSAT(arrays=array_list,
+                               inverter_parameters=inverter_parameters,
+                               strings_per_inverter=strings_per_inverter,
+                               name=name)
+    elif axis_azimuth == 90 or axis_azimuth == 270:
+        system = AVSystemNSSAT(arrays=array_list,
+                               inverter_parameters=inverter_parameters,
+                               strings_per_inverter=strings_per_inverter,
+                               name=name)
+    else:
+        raise ValueError('Axis azimuth must resolve to 0, 90, 180, or 270 degrees.')
+
+    system.set_timeinterval(num_int)
+    return system
+
+
 def run_modelchain(system, site_location, weather_df,
                    aoi_model='no_loss', spectral_model='no_loss'):
     """

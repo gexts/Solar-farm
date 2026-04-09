@@ -13,7 +13,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 from pvlib.location import Location
 
 from sf_design.avsystem import AVSystemEWFT, AVSystemEWSAT, AVSystemNSFT, AVSystemNSSAT
-from sf_design.solar_gen import fixed_tilt_monofacial_system, run_modelchain
+from sf_design.solar_gen import (
+    fixed_tilt_monofacial_system,
+    single_axis_tracking_monofacial_system,
+    run_modelchain,
+)
 
 
 DEFAULT_CROP_LIBRARY = {
@@ -270,6 +274,104 @@ def _economic_analysis(annual_energy_kwh: float, dc_capacity_kw: float,
     }
 
 
+def _run_pv_energy_model(params: dict, weather: pd.DataFrame, location: Location):
+    panel_area = params["panel_length"] * params["panel_width"]
+    array_capacity_watts = panel_area * params["panel_power_density_kw_m2"] * 1000.0
+    inverter_capacity_watts = (array_capacity_watts * params["row_count"]) / 1.2
+    module_parameters = {
+        "pdc0": array_capacity_watts,
+        "gamma_pdc": params.get("gamma_pdc", -0.0047),
+    }
+    module_parameters_list = [module_parameters] * params["row_count"]
+    inverter_parameters = {"pdc0": inverter_capacity_watts}
+
+    if params["layout"] == "ew-ft":
+        surface_tilt = abs(float(params["tilt"]))
+        surface_azimuth = 270 if float(params["tilt"]) >= 0 else 90
+        pv_system = fixed_tilt_monofacial_system(
+            weather_df=weather[["ghi", "dni", "dhi"]],
+            num_array=params["row_count"],
+            surface_tilt_list=[surface_tilt] * params["row_count"],
+            surface_azimuth_list=[surface_azimuth] * params["row_count"],
+            module_parameters_list=module_parameters_list,
+            inverter_parameters=inverter_parameters,
+            temperature_model="sapm",
+            array_type="open_rack_glass_polymer",
+            module_type="glass_polymer",
+            modules_per_string=1,
+            strings_per_inverter=1,
+            albedo=0.2,
+            name="AV energy system",
+        )
+    elif params["layout"] == "ns-ft":
+        pv_system = fixed_tilt_monofacial_system(
+            weather_df=weather[["ghi", "dni", "dhi"]],
+            num_array=params["row_count"],
+            surface_tilt_list=[abs(float(params["tilt"]))] * params["row_count"],
+            surface_azimuth_list=[180] * params["row_count"],
+            module_parameters_list=module_parameters_list,
+            inverter_parameters=inverter_parameters,
+            temperature_model="sapm",
+            array_type="open_rack_glass_polymer",
+            module_type="glass_polymer",
+            modules_per_string=1,
+            strings_per_inverter=1,
+            albedo=0.2,
+            name="AV energy system",
+        )
+    elif params["layout"] == "ew-sat":
+        max_angle = max(
+            abs(float(params["tilt_morning"])),
+            abs(float(params["tilt_noon"])),
+            abs(float(params["tilt_evening"])),
+        )
+        pv_system = single_axis_tracking_monofacial_system(
+            weather_df=weather[["ghi", "dni", "dhi"]],
+            num_array=params["row_count"],
+            axis_tilt=0,
+            axis_azimuth=180,
+            max_angle=max_angle,
+            module_parameters_list=module_parameters_list,
+            inverter_parameters=inverter_parameters,
+            backtrack=True,
+            gcr=0.4,
+            albedo=0.2,
+            temperature_model="sapm",
+            array_type="open_rack_glass_polymer",
+            module_type="glass_polymer",
+            modules_per_string=1,
+            strings_per_inverter=1,
+            name="AV energy system",
+        )
+    else:
+        max_angle = max(
+            abs(float(params["tilt_morning"])),
+            abs(float(params["tilt_noon"])),
+        )
+        pv_system = single_axis_tracking_monofacial_system(
+            weather_df=weather[["ghi", "dni", "dhi"]],
+            num_array=params["row_count"],
+            axis_tilt=0,
+            axis_azimuth=90,
+            max_angle=max_angle,
+            module_parameters_list=module_parameters_list,
+            inverter_parameters=inverter_parameters,
+            backtrack=True,
+            gcr=0.4,
+            albedo=0.2,
+            temperature_model="sapm",
+            array_type="open_rack_glass_polymer",
+            module_type="glass_polymer",
+            modules_per_string=1,
+            strings_per_inverter=1,
+            name="AV energy system",
+        )
+
+    pv_ac, pv_dc = run_modelchain(pv_system, location, weather[["ghi", "dni", "dhi"]])
+    total_dc_capacity_kw = (array_capacity_watts * params["row_count"]) / 1000.0
+    return pv_ac, pv_dc, total_dc_capacity_kw
+
+
 def _create_pdf_report(report_path: Path, summary: dict, crop_rows: List[dict], image_paths: Dict[str, str]) -> None:
     with PdfPages(report_path) as pdf:
         fig, ax = plt.subplots(figsize=(8.27, 11.69))
@@ -341,31 +443,7 @@ def run_av_analysis(params: dict) -> SimulationOutputs:
 
     crop_rows = _crop_suitability(system, crop_library)
 
-    panel_area = params["panel_length"] * params["panel_width"]
-    array_capacity_watts = panel_area * params["panel_power_density_kw_m2"] * 1000.0
-    total_dc_capacity_kw = (array_capacity_watts * params["row_count"]) / 1000.0
-    inverter_capacity_watts = (array_capacity_watts * params["row_count"]) / 1.2
-    module_parameters = {
-        "pdc0": array_capacity_watts,
-        "gamma_pdc": params.get("gamma_pdc", -0.0047),
-    }
-    inverter_parameters = {"pdc0": inverter_capacity_watts}
-    pv_system = fixed_tilt_monofacial_system(
-        weather_df=weather[["ghi", "dni", "dhi"]],
-        num_array=params["row_count"],
-        surface_tilt_list=[params["tilt"]] * params["row_count"],
-        surface_azimuth_list=[90 if params["layout"].startswith("ew") else 180] * params["row_count"],
-        module_parameters_list=[module_parameters] * params["row_count"],
-        inverter_parameters=inverter_parameters,
-        temperature_model="sapm",
-        array_type="open_rack_glass_polymer",
-        module_type="glass_polymer",
-        modules_per_string=1,
-        strings_per_inverter=1,
-        albedo=0.2,
-        name="Desktop AV energy system",
-    )
-    pv_ac, pv_dc = run_modelchain(pv_system, location, weather[["ghi", "dni", "dhi"]])
+    pv_ac, pv_dc, total_dc_capacity_kw = _run_pv_energy_model(params, weather, location)
     annual_energy_kwh = float(pv_ac.sum() / 1000.0)
 
     fig, ax = plt.subplots(figsize=(9, 4))
