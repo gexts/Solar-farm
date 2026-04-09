@@ -15,12 +15,10 @@ import logging
 from pvlib.pvsystem import PVSystem, Array, FixedMount, SingleAxisTrackerMount
 from pvlib.modelchain import ModelChain
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
-from pvlib.bifacial.pvfactors import pvfactors_timeseries
 import warnings
 from sf_design.avsystem import (AVSystemEWFT, AVSystemEWSAT,
                                 AVSystemNSFT, AVSystemNSSAT)
 
-# suppressing shapely warnings that occur on import of pvfactors
 warnings.filterwarnings(action='ignore', module='pvfactors')
 
 
@@ -574,6 +572,14 @@ def get_bifacial_irradiance(weather_df, solar_position, surface_azimuth, surface
     # users may select different values depending on needs
 
     times = weather_df.index
+
+    try:
+        from pvlib.bifacial.pvfactors import pvfactors_timeseries
+    except Exception as exc:
+        raise ImportError(
+            "Bifacial irradiance modelling requires the optional pvfactors-compatible "
+            "stack. The web app's default monofacial workflow does not need it."
+        ) from exc
 
     irrad = pvfactors_timeseries(solar_position['azimuth'],
                                  solar_position['apparent_zenith'],
