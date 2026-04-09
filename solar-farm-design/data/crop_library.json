@@ -1,0 +1,12 @@
+{
+  "soybean": { "par_requirement": 336, "revenue_per_m2": 18.0 },
+  "lettuce": { "par_requirement": 420, "revenue_per_m2": 22.0 },
+  "potato": { "par_requirement": 504, "revenue_per_m2": 20.0 },
+  "cabbage": { "par_requirement": 672, "revenue_per_m2": 16.0 },
+  "spinach": { "par_requirement": 300, "revenue_per_m2": 19.0 },
+  "tomato": { "par_requirement": 600, "revenue_per_m2": 28.0 },
+  "pepper": { "par_requirement": 580, "revenue_per_m2": 26.0 },
+  "strawberry": { "par_requirement": 520, "revenue_per_m2": 32.0 },
+  "rice": { "par_requirement": 540, "revenue_per_m2": 15.0 },
+  "wheat": { "par_requirement": 460, "revenue_per_m2": 12.0 }
+}

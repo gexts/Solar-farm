@@ -1,0 +1,12 @@
+streamlit==1.56.0
+pandas==1.5.3
+matplotlib==3.7.5
+numpy==1.23.5
+scipy==1.10.1
+scikit-learn==1.2.2
+pvlib==0.9.5
+pyomo==6.7.3
+pvfactors==1.5.2
+shapely==1.8.5
+pillow==12.2.0
+h5py==3.16.0
