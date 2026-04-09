@@ -33,6 +33,16 @@ def fmt_number(value, digits: int = 2) -> str:
     return str(value)
 
 
+def layout_help_text(layout: str) -> str:
+    help_map = {
+        "ew-ft": "东西向固定倾角",
+        "ns-ft": "南北向固定倾角",
+        "ew-sat": "东西向单轴跟踪",
+        "ns-sat": "南北向单轴跟踪",
+    }
+    return help_map.get(layout, layout)
+
+
 st.title("农光互补分析平台")
 st.caption("输入农场与光伏参数，上传天气数据或作物库，生成发电、作物适配、经济性和 PDF 报告。")
 
@@ -40,6 +50,7 @@ with st.sidebar:
     st.header("输入参数")
 
     layout = st.selectbox("布局类型", ["ew-ft", "ns-ft", "ew-sat", "ns-sat"], index=0)
+    st.caption(f"当前模式：{layout_help_text(layout)}")
     latitude = st.number_input("纬度", value=42.45, format="%.4f")
     longitude = st.number_input("经度", value=-76.50, format="%.4f")
     timezone = st.text_input("时区", value="US/Eastern")
@@ -54,10 +65,22 @@ with st.sidebar:
     clearance = st.number_input("边界留白（米）", min_value=0.0, value=5.0, step=0.5)
     day_start = st.number_input("生长季起始日", min_value=1, max_value=365, value=60, step=1)
     day_end = st.number_input("生长季结束日", min_value=1, max_value=365, value=274, step=1)
-    tilt = st.number_input("固定倾角（度）", value=20.0, step=1.0)
-    tilt_morning = st.number_input("早晨倾角（度）", value=60.0, step=1.0)
-    tilt_noon = st.number_input("中午倾角（度）", value=0.0, step=1.0)
-    tilt_evening = st.number_input("傍晚倾角（度）", value=-60.0, step=1.0)
+
+    if layout in ("ew-ft", "ns-ft"):
+        tilt = st.number_input("固定倾角（度）", value=20.0, step=1.0)
+        tilt_morning = 60.0
+        tilt_noon = 0.0
+        tilt_evening = -60.0
+    elif layout == "ew-sat":
+        tilt = 20.0
+        tilt_morning = st.number_input("早晨倾角（度）", value=60.0, step=1.0)
+        tilt_noon = st.number_input("中午倾角（度）", value=0.0, step=1.0)
+        tilt_evening = st.number_input("傍晚倾角（度）", value=-60.0, step=1.0)
+    else:
+        tilt = 20.0
+        tilt_morning = st.number_input("早晨倾角（度）", value=60.0, step=1.0)
+        tilt_noon = st.number_input("中午倾角（度）", value=0.0, step=1.0)
+        tilt_evening = -60.0
 
     st.subheader("模型参数")
     mesh_size = st.number_input("网格尺寸（米）", min_value=0.1, value=1.0, step=0.5)
@@ -82,6 +105,11 @@ with st.sidebar:
     output_name = st.text_input("结果子目录名", value="streamlit_run")
 
     run_button = st.button("开始计算", type="primary", use_container_width=True)
+
+current_layout = st.session_state.get("_current_layout")
+if current_layout != layout:
+    st.session_state["_current_layout"] = layout
+    st.session_state.pop("outputs", None)
 
 
 tab_summary, tab_crops, tab_images, tab_about = st.tabs(["结果摘要", "作物分析", "图像结果", "说明"])
